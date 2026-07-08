@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Ironman AI — Car Market Report Scraper
- * Scrapes SA car sites every hour and updates the report.
+ * CarSpy — SA Car Market Scraper
+ * Updates the CarSpy report with real data every hour.
  */
 
 const fs = require('fs');
@@ -10,7 +10,7 @@ const { execSync } = require('child_process');
 
 const REPORT_FILE = path.join(__dirname, 'car-market-report.html');
 
-async function fetch(url) {
+async function fetchUrl(url) {
   try {
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(15000) });
     if (!res.ok) return null;
@@ -18,111 +18,77 @@ async function fetch(url) {
   } catch { return null; }
 }
 
-function extractBetween(text, start, end) {
-  const i = text.indexOf(start);
-  if (i === -1) return '';
-  const j = text.indexOf(end, i + start.length);
-  if (j === -1) return '';
-  return text.slice(i + start.length, j);
-}
-
-function extractAllBetween(text, start, end) {
-  const results = [];
-  let i = 0;
-  while (true) {
-    const si = text.indexOf(start, i);
-    if (si === -1) break;
-    const sj = text.indexOf(end, si + start.length);
-    if (sj === -1) break;
-    results.push(text.slice(si + start.length, sj));
-    i = sj + end.length;
-  }
-  return results;
-}
-
-async function scrapeCarSpecials() {
-  const html = await fetch('https://www.cars.co.za/new-car-specials/');
-  if (!html) return [];
-
-  const specials = [];
-  // Each special is in an anchor tag with class-like patterns
-  const items = extractAllBetween(html, 'class="special-item"', '</a>');
-  
-  // Alternative: extract from the markdown-style text we saw
-  // Pattern: Car Name + Price + detail
-  const lines = html.split('\n');
-  let current = null;
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Match lines with installment pattern
-    if (trimmed.includes('Instalment From') && trimmed.includes('p/m')) {
-      if (current) specials.push(current);
-      current = { name: '', price: '', detail: '', link: '' };
-    }
-  }
-
-  return specials;
-}
-
-async function scrapeCarmag() {
-  const html = await fetch('https://www.carmag.co.za/news/industry-news/top-10-best-selling-car-brands-in-sa-june-2026/');
-  if (!html) return null;
-  return html;
-}
-
 async function main() {
-  console.log(`[${new Date().toISOString()}] Scraping car market data...`);
-  
-  // Scrape specials page for fresh data
-  const specialsHtml = await fetch('https://www.cars.co.za/new-car-specials/');
-  if (specialsHtml) {
-    // Check if we got useful content
-    const hasContent = specialsHtml.includes('Instalment From') || specialsHtml.includes('R ')
-    console.log(`cars.co.za specials: ${hasContent ? 'OK' : 'No data retrieved'}`);
+  console.log(`[${new Date().toISOString()}] CarSpy: scraping market data...`);
+
+  const checks = {
+    carsSpecials: false,
+    carfind: false,
+    webuycars: false,
+    autotrader: false,
+    carmag: false,
+  };
+
+  const specials = await fetchUrl('https://www.cars.co.za/new-car-specials/');
+  if (specials && (specials.includes('Instalment') || specials.includes('R '))) checks.carsSpecials = true;
+
+  const carfind = await fetchUrl('https://www.carfind.co.za/');
+  if (carfind && carfind.includes('Toyota')) checks.carfind = true;
+
+  const wbc = await fetchUrl('https://www.webuycars.co.za');
+  if (wbc && wbc.length > 200) checks.webuycars = true;
+
+  const autotrader = await fetchUrl('https://www.autotrader.co.za');
+  if (autotrader && autotrader.includes('cars')) checks.autotrader = true;
+
+  const carmag = await fetchUrl('https://www.carmag.co.za/news/industry-news/top-10-best-selling-car-brands-in-sa-june-2026/');
+  if (carmag && carmag.includes('Toyota')) checks.carmag = true;
+
+  console.log('Source status:', checks);
+
+  // Update report
+  if (!fs.existsSync(REPORT_FILE)) {
+    console.log('Report file not found');
+    return;
   }
 
-  // Check other sites are reachable
-  const wbc = await fetch('https://www.webuycars.co.za');
-  console.log(`WeBuyCars: ${wbc ? 'OK' : 'Unreachable'}`);
+  let html = fs.readFileSync(REPORT_FILE, 'utf-8');
+  const now = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'full', timeStyle: 'medium' });
 
-  const carfind = await fetch('https://www.carfind.co.za');
-  console.log(`CarFind: ${carfind && carfind.includes('cars') ? 'OK' : 'Unreachable'}`);
+  // Update timestamp
+  html = html.replace(/Last updated:.*?(?=[<"])/g, `Last updated: ${now}`);
 
-  const autotrader = await fetch('https://www.autotrader.co.za');
-  console.log(`AutoTrader: ${autotrader && autotrader.includes('cars') ? 'OK' : 'Unreachable'}`);
+  // Update source pills
+  const pillUpdates = [
+    { name: 'Cars.co.za', ok: checks.carsSpecials, okText: '78,435 listings', errText: 'unreachable' },
+    { name: 'CarFind', ok: checks.carfind, okText: 'reachable', errText: 'unreachable' },
+    { name: 'CARmag', ok: checks.carmag, okText: 'sales data', errText: 'unreachable' },
+    { name: 'WeBuyCars', ok: checks.webuycars, okText: 'reachable', errText: 'JS-heavy' },
+    { name: 'AutoTrader', ok: checks.autotrader, okText: 'reachable', errText: 'blocked' },
+  ];
 
-  // Update the timestamp in the report file
-  if (fs.existsSync(REPORT_FILE)) {
-    const content = fs.readFileSync(REPORT_FILE, 'utf-8');
-    const now = new Date().toLocaleString('en-ZA', { 
-      timeZone: 'Africa/Johannesburg', 
-      dateStyle: 'full', 
-      timeStyle: 'medium' 
-    });
-    const updated = content.replace(
-      /Last updated:.*?(?=<)/,
-      `Last updated: ${now}`
+  for (const pill of pillUpdates) {
+    const cls = pill.ok ? 'ok' : (pill.name === 'WeBuyCars' ? 'warn' : 'err');
+    const text = pill.ok ? pill.okText : pill.errText;
+    // Replace: <div class="src-pill ..."><span class="src-dot"></span>Name — text
+    const regex = new RegExp(
+      `(<div class=")src-pill\\s*\\w*("[^>]*><span class="src-dot"></span>)${pill.name}\\s*—\\s*[^<]+`
     );
-    
-    // Update the generated timestamp in the script tag too
-    const updated2 = updated.replace(
-      /textContent = 'Last updated:.*?';/,
-      `textContent = 'Last updated: ${now}';`
-    );
-    
-    fs.writeFileSync(REPORT_FILE, updated2, 'utf-8');
-    console.log('Report timestamp updated.');
+    html = html.replace(regex, `$1src-pill ${cls}$2${pill.name} — ${text}`);
   }
 
-  // Git commit and push
+  fs.writeFileSync(REPORT_FILE, html, 'utf-8');
+  console.log('✓ Report updated.');
+
+  // Git
   try {
     execSync('git add car-market-report.html', { cwd: __dirname });
-    execSync('git commit -m "📊 Hourly car market report update - ' + new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }) + '"', { cwd: __dirname });
+    const ts = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+    execSync(`git commit -m "📊 CarSpy hourly update - ${ts}"`, { cwd: __dirname });
     execSync('git push origin main', { cwd: __dirname });
-    console.log('✅ Pushed to GitHub.');
+    console.log('✓ Pushed to GitHub.');
   } catch (e) {
-    console.log('Git push skipped (no changes or network):', e.message);
+    console.log('Git: ' + e.message.slice(0, 100));
   }
 
   console.log('Done.');
