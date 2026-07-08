@@ -1,6 +1,6 @@
 /* ============================================
    IRONMAN AI — Dealer Assistant Chat
-   v1.1 — Arc Reactor
+   v1.2 — ChatGPT Design
    ============================================ */
 
 // === Configuration ===
@@ -29,7 +29,6 @@ const messagesEl = document.getElementById('messages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const sidebar = document.getElementById('sidebar');
-const menuToggle = document.getElementById('menuToggle');
 const convListEl = document.getElementById('conversationList');
 
 // === Init ===
@@ -38,21 +37,28 @@ document.addEventListener('DOMContentLoaded', () => {
   renderConversationList();
   openConversation(getOrCreateActiveConv().id);
   scrollToBottom();
+  setupMobileMenu();
+});
 
-  if (menuToggle) {
-    menuToggle.addEventListener('click', () => {
+// === Mobile Hamburger ===
+function setupMobileMenu() {
+  if (window.innerWidth <= 768) {
+    const hamburger = document.createElement('button');
+    hamburger.className = 'mobile-menu-btn';
+    hamburger.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+    hamburger.style.cssText = 'position:fixed;top:12px;left:12px;z-index:50;background:var(--bg-tertiary);border:none;color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    document.body.appendChild(hamburger);
+    hamburger.addEventListener('click', () => {
       sidebar.classList.toggle('open');
     });
-  }
 
-  document.addEventListener('click', (e) => {
-    if (window.innerWidth <= 768) {
-      if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+    document.addEventListener('click', (e) => {
+      if (!sidebar.contains(e.target) && !hamburger.contains(e.target)) {
         sidebar.classList.remove('open');
       }
-    }
-  });
-});
+    });
+  }
+}
 
 // === Conversations (localStorage) ===
 function loadConversations() {
@@ -69,7 +75,7 @@ function loadConversations() {
 function saveConversations() {
   try {
     localStorage.setItem(CONFIG.storageKey, JSON.stringify(conversations));
-  } catch (e) { /* storage full — silently ignore */ }
+  } catch (e) { /* storage full */ }
 }
 
 function generateId() {
@@ -102,7 +108,6 @@ function msgTitle(msgs) {
 // === Conversation List (Sidebar) ===
 function renderConversationList() {
   if (!convListEl) return;
-  // Show latest first
   const sorted = [...conversations].sort((a, b) => (b.lastActivity || b.createdAt) - (a.lastActivity || a.createdAt));
 
   if (sorted.length === 0) {
@@ -113,7 +118,6 @@ function renderConversationList() {
   convListEl.innerHTML = sorted.map(c => `
     <div class="conv-item ${c.id === activeConvId ? 'active' : ''}" data-id="${c.id}" onclick="switchConversation('${c.id}')">
       <div class="conv-title">${escapeHtml(msgTitle(c.messages))}</div>
-      <div class="conv-meta">${c.messages.length} messages</div>
       <button class="conv-del" onclick="event.stopPropagation(); deleteConversation('${c.id}')" title="Delete">✕</button>
     </div>
   `).join('');
@@ -128,7 +132,6 @@ function switchConversation(id) {
 }
 
 function deleteConversation(id) {
-  if (!confirm('Delete this conversation?')) return;
   conversations = conversations.filter(c => c.id !== id);
   if (conversations.length === 0) {
     conversations.push({ id: generateId(), title: 'New Chat', messages: [], createdAt: Date.now() });
@@ -144,7 +147,6 @@ function deleteConversation(id) {
 // === Render Messages ===
 function renderMessages(conv) {
   messagesEl.querySelectorAll('.message').forEach(el => el.remove());
-
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
 
@@ -158,21 +160,29 @@ function renderMessages(conv) {
 }
 
 function showWelcome() {
-  // Re-inject welcome if it was removed and there are no messages
   const existing = document.querySelector('.welcome');
   if (existing) return;
   messagesEl.insertAdjacentHTML('afterbegin', `
     <div class="welcome">
-      <div class="welcome-icon">
-        <div class="arc-reactor-lg"></div>
-      </div>
-      <h2>Hey, I'm Ironman 🦾</h2>
-      <p>Your AI-powered dealer assistant. Ask me anything about your deals, inventory, customers, or strategy.</p>
+      <div class="welcome-icon">🦾</div>
+      <h2>How can I help you today?</h2>
       <div class="suggestions">
-        <button class="suggestion-chip" onclick="sendSuggestion('Analyze my current deals')">Analyze my current deals</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('Show me today\\'s priorities')">Show me today's priorities</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('How\\'s the market looking?')">How's the market looking?</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('What should I focus on?')">What should I focus on?</button>
+        <button class="suggestion-chip" onclick="sendSuggestion('Analyze my current deals')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Analyze my current deals
+        </button>
+        <button class="suggestion-chip" onclick="sendSuggestion('Show me today\\'s priorities')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Show me today's priorities
+        </button>
+        <button class="suggestion-chip" onclick="sendSuggestion('How\\'s the market looking?')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          How's the market looking?
+        </button>
+        <button class="suggestion-chip" onclick="sendSuggestion('What should I focus on?')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          What should I focus on?
+        </button>
       </div>
     </div>
   `);
@@ -189,11 +199,9 @@ async function sendMessage() {
 
   const conv = getOrCreateActiveConv();
 
-  // Remove welcome
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
 
-  // Add user message
   conv.messages.push({ role: 'user', text, time: new Date().toISOString() });
   addMessageDOM(text, 'user');
   conv.title = msgTitle(conv.messages);
@@ -201,9 +209,7 @@ async function sendMessage() {
   saveConversations();
   renderConversationList();
 
-  // Typing indicator
   const typingId = showTyping();
-
   isProcessing = true;
 
   try {
@@ -300,14 +306,14 @@ function addMessageDOM(text, role, time) {
   if (role === 'assistant' || role === 'error') {
     msgDiv.innerHTML = `
       <div class="assistant-avatar">🦾</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="bubble">${formatMessage(text)}</div>
         <div class="message-time">${ts}</div>
       </div>
     `;
   } else {
     msgDiv.innerHTML = `
-      <div>
+      <div style="margin-left:46px;flex:1;min-width:0">
         <div class="bubble">${escapeHtml(text)}</div>
         <div class="message-time" style="text-align:right">${ts}</div>
       </div>
@@ -325,7 +331,7 @@ function addMessage(text, role) {
 function formatMessage(text) {
   let formatted = escapeHtml(text);
 
-  // Code blocks (```...```)
+  // Code blocks
   formatted = formatted.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
     const trimmed = code.trim();
     const langClass = lang ? ` class="lang-${escapeHtml(lang)}"` : '';
@@ -334,7 +340,6 @@ function formatMessage(text) {
 
   // Inline code
   formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-
   // Bold
   formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   // Italic
@@ -342,7 +347,6 @@ function formatMessage(text) {
   // Lists
   formatted = formatted.replace(/^\s*•\s*/gm, '<span class="bullet">•</span> ');
   formatted = formatted.replace(/^\s*-\s*/gm, '<span class="bullet">•</span> ');
-  // Numbered lists
   formatted = formatted.replace(/^(\d+\.)\s+/gm, '<span class="num-list">$1</span> ');
   // Line breaks
   formatted = formatted.replace(/\n/g, '<br>');
@@ -363,7 +367,7 @@ function showTyping() {
   div.id = id;
   div.innerHTML = `
     <div class="assistant-avatar">🦾</div>
-    <div>
+    <div style="flex:1;min-width:0">
       <div class="bubble">
         <div class="typing-indicator">
           <span></span><span></span><span></span>
@@ -415,7 +419,6 @@ function sendSuggestion(text) {
 }
 
 function clearChat() {
-  if (!confirm('Clear the current conversation?')) return;
   const conv = getConv(activeConvId);
   if (conv) {
     conv.messages = [];
@@ -437,4 +440,8 @@ function newChat() {
   if (window.innerWidth <= 768) {
     sidebar.classList.remove('open');
   }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light-theme');
 }
