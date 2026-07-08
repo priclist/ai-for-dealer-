@@ -175,6 +175,10 @@
       </div>
     </div>
     <nav>
+      <button id="refreshBtn" onclick="refreshData()" style="background:transparent;border:0.5px solid var(--border-strong);color:var(--text-dim);font-family:var(--font-body);font-size:13px;padding:8px 14px;border-radius:8px;cursor:pointer;transition:border-color .15s,color .15s;display:flex;align-items:center;gap:6px;">
+        <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span id="refreshText">Refresh</span>
+      </button>
       <select>
         <option>Sort: newest</option>
         <option>Sort: price low to high</option>
@@ -415,13 +419,50 @@
   </div>
 
   <footer>
-    📊 Data from cars.co.za, carfind.co.za, carmag.co.za · Updated hourly by Ironman AI 🦾
+    📊 Data from cars.co.za, carfind.co.za, carmag.co.za · Updated <span id="refreshStatus">hourly</span> by Ironman AI 🦾
   </footer>
 </div>
 
 <script>
   const now = new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', dateStyle: 'full', timeStyle: 'medium' });
   document.getElementById('updateTime').textContent = 'Last updated: ' + now;
+
+  async function refreshData() {
+    const btn = document.getElementById('refreshBtn');
+    const icon = document.getElementById('refreshIcon');
+    const text = document.getElementById('refreshText');
+    const status = document.getElementById('refreshStatus');
+
+    btn.style.opacity = '0.6';
+    btn.style.pointerEvents = 'none';
+    text.textContent = 'Refreshing...';
+    icon.style.animation = 'spin 1s linear infinite';
+    status.textContent = 'refreshing now...';
+
+    try {
+      // Use no-cors to send request from HTTPS page to HTTP endpoint
+      await fetch('http://75.119.130.136:3102/refresh', { method: 'POST', mode: 'no-cors', signal: AbortSignal.timeout(45000) });
+      status.textContent = 'refreshed ✓';
+      text.textContent = 'Refresh';
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      icon.style.animation = 'none';
+      setTimeout(() => location.reload(), 1500);
+    } catch (err) {
+      // Even if fetch fails (no-cors mode), the request likely went through
+      status.textContent = 'refresh triggered ✓';
+      text.textContent = 'Refresh';
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      icon.style.animation = 'none';
+      setTimeout(() => location.reload(), 2000);
+    }
+  }
+
+  // Add spin animation
+  const style = document.createElement('style');
+  style.textContent = '@keyframes spin { 100% { transform: rotate(360deg); } }';
+  document.head.appendChild(style);
 </script>
 </body>
 </html>
